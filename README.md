@@ -1,6 +1,6 @@
-# Bug Tracker — Frontend Client
+# Tracebook — Frontend Client
 
-React + Vite + Tailwind CSS + dnd-kit + Socket.io frontend for the Bug Tracker application.
+React, Vite, Tailwind CSS v4, dnd-kit, and Socket.io frontend for Tracebook.
 
 ## Setup
 ```bash
@@ -15,6 +15,6 @@ npm run dev
 - `npm run preview` — Preview production build locally
 
 ## Environment Variables
-- `VITE_API_URL` — Backend API base URL (e.g. `http://localhost:5000/api`)
+- `VITE_API_URL` — Backend API base URL (for example `http://localhost:5000/api`)
 
-Includes `vercel.json` and `public/_redirects` for SPA deep-link routing on Vercel and Netlify.
+Includes `vercel.json` and `public/_redirects` for SPA routing on Vercel and Netlify.

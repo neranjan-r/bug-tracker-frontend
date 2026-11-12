@@ -11,6 +11,8 @@ import api from "../api/client.js";
 import { useSocket } from "../context/SocketContext.jsx";
 import { useBreadcrumbs } from "../components/AppLayout.jsx";
 import { RoleBadge } from "../components/badges.jsx";
+import { AlertBanner } from "../components/ui.jsx";
+import { getProjectRouteId } from "../utils/format.js";
 
 export function useProject() {
   return useOutletContext();
@@ -19,7 +21,7 @@ export function useProject() {
 export default function ProjectLayout() {
   const { projectId } = useParams();
   const location = useLocation();
-  const { setBreadcrumbs } = useBreadcrumbs();
+  const { setBreadcrumbs, setActiveProject } = useBreadcrumbs();
   const { socket, connected } = useSocket() || {};
 
   const [project, setProject] = useState(null);
@@ -34,7 +36,9 @@ export default function ProjectLayout() {
     try {
       const data = await api.get(`/projects/${projectId}`);
       setProject(data.project);
+      setActiveProject(data.project);
     } catch (err) {
+      setActiveProject(null);
       if (
         err.message?.toLowerCase().includes("not found") ||
         err.message?.toLowerCase().includes("invalid project")
@@ -46,13 +50,19 @@ export default function ProjectLayout() {
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, setActiveProject]);
 
   useEffect(() => {
     loadProject();
-  }, [loadProject]);
+    return () => setActiveProject(null);
+  }, [loadProject, setActiveProject]);
 
-  // Join the project's Socket.io room while viewing it and re-join on reconnect
+  useEffect(() => {
+    if (project) {
+      setActiveProject(project);
+    }
+  }, [project, setActiveProject]);
+
   useEffect(() => {
     if (!socket || !connected || !project?._id) return undefined;
     socket.emit("project:join", project._id);
@@ -63,71 +73,66 @@ export default function ProjectLayout() {
 
   useEffect(() => {
     if (!project) return;
-    const base = `/projects/${project._id}`;
+    const routeId = getProjectRouteId(project);
+    const base = `/projects/${routeId}`;
     let section = "Board";
-    if (location.pathname.startsWith(`${base}/overview`)) section = "Overview";
-    else if (location.pathname.startsWith(`${base}/list`)) section = "List";
-    else if (location.pathname.startsWith(`${base}/members`)) section = "Members";
-    else if (location.pathname.startsWith(`${base}/settings`)) section = "Settings";
-    else if (location.pathname.startsWith(`${base}/tickets/`)) section = "Ticket";
+    if (location.pathname.includes("/overview")) section = "Overview";
+    else if (location.pathname.includes("/list")) section = "List";
+    else if (location.pathname.includes("/members")) section = "Members";
+    else if (location.pathname.includes("/settings")) section = "Settings";
+    else if (location.pathname.includes("/tickets/")) {
+      const ticketPart = location.pathname.split("/tickets/")[1] || "Ticket";
+      section = ticketPart.toUpperCase();
+    }
 
     setBreadcrumbs([
       { label: "Projects", to: "/" },
-      { label: project.title, to: base },
-      { label: section },
+      { label: project.key || project.title, to: base, mono: Boolean(project.key) },
+      { label: section, mono: location.pathname.includes("/tickets/") },
     ]);
   }, [project, location.pathname, setBreadcrumbs]);
 
   if (loading) {
     return (
-      <div className="space-y-4 animate-pulse">
-        <div className="h-8 w-64 rounded bg-slate-200" />
-        <div className="h-10 w-full rounded bg-slate-200" />
-        <div className="h-64 w-full rounded-xl bg-white border border-slate-200" />
+      <div className="space-y-3 animate-pulse">
+        <div className="h-6 w-56 rounded-badge bg-well" />
+        <div className="h-9 w-full rounded-control bg-well" />
+        <div className="h-52 w-full rounded-panel bg-surface border border-line" />
       </div>
     );
   }
 
   if (notFound) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white p-10 text-center max-w-lg mx-auto mt-8">
-        <h1 className="text-xl font-bold text-slate-900">Project not found</h1>
-        <p className="mt-2 text-sm text-slate-600">
-          This project does not exist or you do not have access to it.
+      <div className="rounded-panel border border-line bg-surface p-6 max-w-md text-left">
+        <p className="font-mono text-xs text-accent">404</p>
+        <h1 className="mt-1 text-base font-semibold text-ink">Project not found</h1>
+        <p className="mt-1 text-sm text-ink-muted">
+          This project does not exist or your account does not have access.
         </p>
         <Link
           to="/"
-          className="mt-5 inline-block rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+          className="mt-4 inline-flex items-center rounded-control bg-accent px-3.5 py-1.5 text-sm font-medium text-white hover:bg-accent-hover transition-colors duration-150"
         >
-          Back to Projects
+          Back to projects
         </Link>
       </div>
     );
   }
 
   if (error) {
-    return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center">
-        <p className="text-sm font-medium text-red-800">{error}</p>
-        <button
-          type="button"
-          onClick={loadProject}
-          className="mt-3 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
-        >
-          Retry
-        </button>
-      </div>
-    );
+    return <AlertBanner message={error} onRetry={loadProject} />;
   }
 
+  const routeId = getProjectRouteId(project);
   const tabs = [
-    { label: "Overview", to: `/projects/${project._id}/overview` },
-    { label: "Board", to: `/projects/${project._id}`, end: true },
-    { label: "List", to: `/projects/${project._id}/list` },
-    { label: "Members", to: `/projects/${project._id}/members` },
+    { label: "Board", to: `/projects/${routeId}/board` },
+    { label: "List", to: `/projects/${routeId}/list` },
+    { label: "Overview", to: `/projects/${routeId}/overview` },
+    { label: "Members", to: `/projects/${routeId}/members` },
   ];
   if (project.role === "owner") {
-    tabs.push({ label: "Settings", to: `/projects/${project._id}/settings` });
+    tabs.push({ label: "Settings", to: `/projects/${routeId}/settings` });
   }
 
   const membersList = [
@@ -137,34 +142,34 @@ export default function ProjectLayout() {
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-2xl font-bold text-slate-900 truncate">
-              {project.title}
-            </h1>
-            <RoleBadge role={project.role} />
-          </div>
-          {project.description && (
-            <p className="mt-1 text-sm text-slate-600 max-w-3xl">
-              {project.description}
-            </p>
-          )}
+      <div className="mb-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-mono text-xs font-semibold text-accent">
+            {project.key}
+          </span>
+          <h1 className="text-lg font-semibold text-ink truncate">
+            {project.title}
+          </h1>
+          <RoleBadge role={project.role} />
         </div>
+        {project.description && (
+          <p className="mt-0.5 text-xs text-ink-muted max-w-3xl">
+            {project.description}
+          </p>
+        )}
       </div>
 
-      <div className="border-b border-slate-200 mb-6 overflow-x-auto">
-        <nav aria-label="Project sections" className="flex gap-1 min-w-max">
+      <div className="border-b border-line mb-4 overflow-x-auto">
+        <nav aria-label="Project views" className="flex gap-1 min-w-max">
           {tabs.map((tab) => (
             <NavLink
               key={tab.to}
               to={tab.to}
-              end={tab.end}
               className={({ isActive }) =>
-                `px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                `px-3 py-2 text-xs font-medium border-b-2 transition-colors duration-150 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
                   isActive
-                    ? "border-indigo-600 text-indigo-600"
-                    : "border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300"
+                    ? "border-accent text-ink"
+                    : "border-transparent text-ink-muted hover:text-ink hover:border-line-strong"
                 }`
               }
             >
@@ -178,9 +183,9 @@ export default function ProjectLayout() {
         context={{
           project,
           role: project.role,
-          membersList,
           setProject,
           reloadProject: loadProject,
+          membersList,
         }}
       />
     </div>

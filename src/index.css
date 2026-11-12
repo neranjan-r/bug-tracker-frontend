@@ -1,2 +1,78 @@
 @import "tailwindcss";
 
+@theme static {
+  /* Palette: warm drafting paper, near-black ink, hairline dividers, and one vermilion accent */
+  --color-paper: #F7F5F0;
+  --color-surface: #FFFFFF;
+  --color-well: #EFECE4;
+  --color-well-hover: #E7E2D6;
+
+  --color-ink: #1A1916;
+  --color-ink-muted: #66625B;
+  --color-ink-subtle: #8C867C;
+
+  --color-line: #DDD8CE;
+  --color-line-strong: #C7C0B3;
+
+  --color-accent: #C94A1E;
+  --color-accent-hover: #A83B15;
+  --color-accent-tint: #FDF1EC;
+  --color-accent-border: #F2C3B2;
+
+  /* Restrained semantic states (no pastel rainbow pills) */
+  --color-ok: #2F6B4F;
+  --color-ok-tint: #EEF5F1;
+  --color-ok-border: #BBD4C7;
+  --color-warn: #A66316;
+  --color-warn-tint: #FAF3E8;
+  --color-warn-border: #E5CFB0;
+  --color-danger: #B9382C;
+  --color-danger-tint: #FBEFEE;
+  --color-danger-border: #EAC4BF;
+
+  /* Typography */
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Tight 4px-6px corner radii across controls and containers */
+  --radius-control: 4px;
+  --radius-badge: 4px;
+  --radius-panel: 6px;
+
+  /* Compact work-tool spacing scale */
+  --spacing-sidebar: 13.75rem;
+  --spacing-topbar: 3rem;
+  --spacing-compact: 0.75rem;
+  --spacing-panel: 1rem;
+  --spacing-section: 1.25rem;
+
+  /* Flat surfaces with optional faint drag lift only */
+  --shadow-none: none;
+  --shadow-drag: 0 2px 6px rgba(26, 25, 22, 0.08);
+}
+
+@layer base {
+  html,
+  body {
+    background-color: var(--color-paper);
+    background-image: none;
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+
+  /* Ensure dates, keys, keyboard hints, and inline code share tabular monospace */
+  time,
+  code,
+  kbd,
+  samp,
+  .font-mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@utility mono-meta {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}

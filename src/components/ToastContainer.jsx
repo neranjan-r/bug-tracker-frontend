@@ -1,10 +1,12 @@
+import { X } from "lucide-react";
+
 export default function ToastContainer({ toasts, onDismiss }) {
   if (!toasts.length) return null;
 
   return (
     <div
       aria-live="polite"
-      className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-[calc(100%-2rem)]"
+      className="fixed bottom-3 right-3 z-50 flex flex-col gap-1.5 max-w-xs w-[calc(100%-1.5rem)]"
     >
       {toasts.map((toast) => {
         const isError = toast.type === "error";
@@ -12,20 +14,20 @@ export default function ToastContainer({ toasts, onDismiss }) {
           <div
             key={toast.id}
             role="status"
-            className={`flex items-start justify-between gap-3 px-4 py-3 rounded-lg shadow-lg border text-sm font-medium transition-all ${
+            className={`flex items-center justify-between gap-2.5 px-3 py-2 rounded-control border text-xs font-medium transition-opacity duration-150 ${
               isError
-                ? "bg-red-50 border-red-200 text-red-800"
-                : "bg-emerald-50 border-emerald-200 text-emerald-800"
+                ? "bg-danger-tint border-danger-border text-danger"
+                : "bg-ink border-ink text-paper"
             }`}
           >
-            <span>{toast.message}</span>
+            <span className="leading-snug">{toast.message}</span>
             <button
               type="button"
               onClick={() => onDismiss(toast.id)}
               aria-label="Dismiss notification"
-              className="text-current opacity-60 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500 rounded px-1"
+              className="shrink-0 opacity-70 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded-control p-0.5 cursor-pointer"
             >
-              ×
+              <X size={13} strokeWidth={1.75} aria-hidden="true" />
             </button>
           </div>
         );
@@ -33,4 +35,3 @@ export default function ToastContainer({ toasts, onDismiss }) {
     </div>
   );
 }
-

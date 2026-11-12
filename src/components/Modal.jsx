@@ -1,8 +1,15 @@
 import { useEffect } from "react";
+import { X } from "lucide-react";
 
-export default function Modal({ open, onClose, title, children, maxWidth = "max-w-lg" }) {
+export default function Modal({
+  open,
+  onClose,
+  title,
+  children,
+  maxWidth = "max-w-lg",
+}) {
   useEffect(() => {
-    if (!open) return;
+    if (!open) return undefined;
     function handleKeyDown(e) {
       if (e.key === "Escape") {
         onClose();
@@ -16,7 +23,7 @@ export default function Modal({ open, onClose, title, children, maxWidth = "max-
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-[1px]"
+      className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-ink/35 transition-opacity duration-150"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -25,22 +32,21 @@ export default function Modal({ open, onClose, title, children, maxWidth = "max-
       aria-label={title}
     >
       <div
-        className={`w-full ${maxWidth} bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col`}
+        className={`w-full ${maxWidth} bg-surface rounded-panel border border-line-strong overflow-hidden max-h-[90vh] flex flex-col`}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-line bg-well/60">
+          <h2 className="text-sm font-semibold text-ink">{title}</h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close modal"
-            className="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="rounded-control p-1 text-ink-muted hover:text-ink hover:bg-well transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 cursor-pointer"
           >
-            ✕
+            <X size={15} strokeWidth={1.75} aria-hidden="true" />
           </button>
         </div>
-        <div className="p-5 overflow-y-auto">{children}</div>
+        <div className="p-4 overflow-y-auto">{children}</div>
       </div>
     </div>
   );
 }
-

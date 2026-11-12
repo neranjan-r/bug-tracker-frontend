@@ -6,12 +6,26 @@ import {
   useState,
 } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import {
+  BarChart2,
+  Folder,
+  LayoutGrid,
+  List,
+  LogOut,
+  Menu,
+  Settings,
+  Users,
+  X,
+} from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
+import { getProjectRouteId } from "../utils/format.js";
+import { UserAvatar } from "./badges.jsx";
+import { Wordmark } from "./ui.jsx";
 
-const BreadcrumbContext = createContext(null);
+const WorkspaceContext = createContext(null);
 
 export function useBreadcrumbs() {
-  return useContext(BreadcrumbContext);
+  return useContext(WorkspaceContext);
 }
 
 export default function AppLayout() {
@@ -19,18 +33,22 @@ export default function AppLayout() {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [breadcrumbs, setBreadcrumbs] = useState([{ label: "Projects", to: "/" }]);
+  const [activeProject, setActiveProject] = useState(null);
 
   const updateBreadcrumbs = useCallback((items) => {
     setBreadcrumbs(items);
   }, []);
 
-  // Close mobile sidebar when route changes or Escape is pressed
+  const updateActiveProject = useCallback((project) => {
+    setActiveProject(project);
+  }, []);
+
   useEffect(() => {
     setSidebarOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
-    if (!sidebarOpen) return;
+    if (!sidebarOpen) return undefined;
     function onKeyDown(e) {
       if (e.key === "Escape") setSidebarOpen(false);
     }
@@ -38,74 +56,118 @@ export default function AppLayout() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [sidebarOpen]);
 
+  const projectBase = activeProject
+    ? `/projects/${getProjectRouteId(activeProject)}`
+    : null;
+
+  const projectLinks = activeProject
+    ? [
+        { label: "Board", to: `${projectBase}/board`, Icon: LayoutGrid },
+        { label: "List", to: `${projectBase}/list`, Icon: List },
+        { label: "Overview", to: `${projectBase}/overview`, Icon: BarChart2 },
+        { label: "Members", to: `${projectBase}/members`, Icon: Users },
+        ...(activeProject.role === "owner"
+          ? [{ label: "Settings", to: `${projectBase}/settings`, Icon: Settings }]
+          : []),
+      ]
+    : [];
+
+  const navLinkClass = ({ isActive }) =>
+    `flex items-center gap-2 border-l-2 px-3 py-1.5 text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
+      isActive
+        ? "border-accent text-ink font-medium bg-surface/60"
+        : "border-transparent text-ink-muted hover:text-ink hover:bg-well-hover/60"
+    }`;
+
   const sidebarContent = (
-    <div className="flex h-full flex-col justify-between bg-slate-900 text-slate-100 w-64">
+    <div className="flex h-full w-sidebar flex-col justify-between bg-well border-r border-line text-ink">
       <div>
-        <div className="flex items-center justify-between px-5 h-16 border-b border-slate-800">
+        <div className="flex items-center justify-between px-4 h-topbar border-b border-line">
           <Link
             to="/"
-            className="flex items-center gap-2.5 text-white font-bold text-lg tracking-tight focus:outline-none focus:ring-2 focus:ring-indigo-400 rounded"
+            className="rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           >
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold">
-              BT
-            </span>
-            <span>Bug Tracker</span>
+            <Wordmark />
           </Link>
           <button
             type="button"
             onClick={() => setSidebarOpen(false)}
-            aria-label="Close navigation menu"
-            className="lg:hidden rounded-md p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            aria-label="Close navigation"
+            className="lg:hidden rounded-control p-1 text-ink-muted hover:text-ink hover:bg-well-hover cursor-pointer"
           >
-            ✕
+            <X size={16} strokeWidth={1.75} aria-hidden="true" />
           </button>
         </div>
 
-        <nav aria-label="Sidebar navigation" className="p-3 space-y-1">
-          <NavLink
-            to="/"
-            end
-            className={({ isActive }) =>
-              `flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
-                isActive || location.pathname.startsWith("/projects")
-                  ? "bg-indigo-600 text-white"
-                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
-              }`
-            }
-          >
-            <span aria-hidden="true">📁</span>
-            <span>Projects</span>
-          </NavLink>
+        <nav aria-label="Primary navigation" className="py-3 space-y-4">
+          <div>
+            <NavLink to="/" end className={navLinkClass}>
+              <Folder size={15} strokeWidth={1.75} aria-hidden="true" />
+              <span>Projects</span>
+            </NavLink>
+          </div>
+
+          {activeProject && (
+            <div className="pt-2 border-t border-line">
+              <div className="px-3 pb-2">
+                <span className="font-mono text-[11px] font-medium uppercase tracking-wide text-accent">
+                  {activeProject.key}
+                </span>
+                <p className="text-xs font-semibold text-ink truncate mt-0.5">
+                  {activeProject.title}
+                </p>
+              </div>
+              <div className="space-y-0.5">
+                {projectLinks.map(({ label, to, Icon }) => (
+                  <NavLink key={to} to={to} className={navLinkClass}>
+                    <Icon size={14} strokeWidth={1.75} aria-hidden="true" />
+                    <span>{label}</span>
+                  </NavLink>
+                ))}
+              </div>
+            </div>
+          )}
         </nav>
       </div>
 
-      <div className="p-4 border-t border-slate-800">
-        <div className="mb-3 px-1">
-          <p className="text-sm font-semibold text-white truncate">{user?.name}</p>
-          <p className="text-xs text-slate-400 truncate">{user?.email}</p>
+      <div className="p-3 border-t border-line">
+        <div className="flex items-center gap-2.5 mb-2.5">
+          <UserAvatar user={user} size="sm" />
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-ink truncate">{user?.name}</p>
+            <p className="font-mono text-[11px] text-ink-muted truncate">
+              {user?.email}
+            </p>
+          </div>
         </div>
         <button
           type="button"
           onClick={logout}
-          className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-colors"
+          className="w-full flex items-center justify-center gap-1.5 rounded-control border border-line-strong bg-surface px-2.5 py-1.5 text-xs font-medium text-ink-muted hover:text-ink hover:bg-well-hover transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 cursor-pointer"
         >
-          Log out
+          <LogOut size={13} strokeWidth={1.75} aria-hidden="true" />
+          <span>Sign out</span>
         </button>
       </div>
     </div>
   );
 
   return (
-    <BreadcrumbContext.Provider value={{ breadcrumbs, setBreadcrumbs: updateBreadcrumbs }}>
-      <div className="min-h-screen flex bg-slate-50 text-slate-900">
-        {/* Desktop sidebar */}
+    <WorkspaceContext.Provider
+      value={{
+        breadcrumbs,
+        setBreadcrumbs: updateBreadcrumbs,
+        activeProject,
+        setActiveProject: updateActiveProject,
+      }}
+    >
+      <div className="min-h-screen flex bg-paper text-ink">
         <aside className="hidden lg:flex lg:shrink-0">{sidebarContent}</aside>
 
-        {/* Mobile sidebar drawer */}
         {sidebarOpen && (
           <div className="fixed inset-0 z-40 flex lg:hidden">
             <div
-              className="fixed inset-0 bg-slate-900/50"
+              className="fixed inset-0 bg-ink/35"
               onClick={() => setSidebarOpen(false)}
               aria-hidden="true"
             />
@@ -114,42 +176,50 @@ export default function AppLayout() {
         )}
 
         <div className="flex-1 flex flex-col min-w-0">
-          <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-slate-200 bg-white px-4 sm:px-6">
+          <header className="sticky top-0 z-20 flex h-topbar items-center gap-3 border-b border-line bg-paper px-4 sm:px-6">
             <button
               type="button"
               onClick={() => setSidebarOpen(true)}
-              aria-label="Open navigation menu"
-              className="lg:hidden rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              aria-label="Open navigation"
+              className="lg:hidden rounded-control border border-line-strong bg-surface p-1.5 text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 cursor-pointer"
             >
-              <span aria-hidden="true" className="block text-base leading-none">
-                ☰
-              </span>
+              <Menu size={16} strokeWidth={1.75} aria-hidden="true" />
             </button>
 
-            <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm overflow-x-auto whitespace-nowrap">
+            <nav
+              aria-label="Breadcrumb"
+              className="flex items-center gap-1.5 text-xs overflow-x-auto whitespace-nowrap"
+            >
               {breadcrumbs.map((crumb, index) => {
                 const isLast = index === breadcrumbs.length - 1;
                 return (
-                  <span key={`${crumb.label}-${index}`} className="flex items-center gap-1.5">
+                  <span
+                    key={`${crumb.label}-${index}`}
+                    className="flex items-center gap-1.5"
+                  >
                     {index > 0 && (
-                      <span className="text-slate-400" aria-hidden="true">
+                      <span className="text-ink-subtle font-mono" aria-hidden="true">
                         /
                       </span>
                     )}
                     {crumb.to && !isLast ? (
                       <Link
                         to={crumb.to}
-                        className="font-medium text-slate-600 hover:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded"
+                        className={`hover:text-accent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded-control ${
+                          crumb.mono ? "font-mono" : "text-ink-muted"
+                        }`}
                       >
                         {crumb.label}
                       </Link>
                     ) : (
                       <span
-                        className={
+                        className={`${
+                          crumb.mono ? "font-mono" : ""
+                        } ${
                           isLast
-                            ? "font-semibold text-slate-900 truncate max-w-[200px] sm:max-w-xs"
-                            : "font-medium text-slate-600"
-                        }
+                            ? "font-medium text-ink truncate max-w-[220px] sm:max-w-sm"
+                            : "text-ink-muted"
+                        }`}
                       >
                         {crumb.label}
                       </span>
@@ -160,12 +230,11 @@ export default function AppLayout() {
             </nav>
           </header>
 
-          <main className="flex-1 p-4 sm:p-6 max-w-7xl w-full mx-auto">
+          <main className="flex-1 px-4 sm:px-6 py-4 max-w-6xl w-full">
             <Outlet />
           </main>
         </div>
       </div>
-    </BreadcrumbContext.Provider>
+    </WorkspaceContext.Provider>
   );
 }
-

@@ -1,57 +1,67 @@
 import { useState } from "react";
+import { UserPlus } from "lucide-react";
 import api from "../api/client.js";
 import { useToast } from "../context/ToastContext.jsx";
 import { useProject } from "./ProjectLayout.jsx";
 import ConfirmDialog from "../components/ConfirmDialog.jsx";
 import { RoleBadge, UserAvatar } from "../components/badges.jsx";
+import {
+  AlertBanner,
+  Button,
+  FieldLabel,
+  Input,
+  RelativeTime,
+  Select,
+} from "../components/ui.jsx";
 import usePageTitle from "../utils/usePageTitle.js";
 
 export default function ProjectMembersPage() {
   const { project, role, setProject } = useProject();
-  usePageTitle(`${project.title} · Members`);
   const toast = useToast();
   const isOwner = role === "owner";
+  usePageTitle(`${project.key || project.title} Members`);
 
   const [email, setEmail] = useState("");
   const [newRole, setNewRole] = useState("developer");
   const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState("");
   const [busyUserId, setBusyUserId] = useState("");
   const [removeTarget, setRemoveTarget] = useState(null);
   const [removing, setRemoving] = useState(false);
 
   async function handleAddMember(e) {
     e.preventDefault();
+    setAddError("");
     if (!email.trim()) {
-      toast.error("Please enter an email address.");
+      setAddError("Enter a teammate email address.");
       return;
     }
 
     setAdding(true);
     try {
       const data = await api.post(`/projects/${project._id}/members`, {
-        email: email.trim(),
+        email: email.trim().toLowerCase(),
         role: newRole,
       });
       setProject(data.project);
       setEmail("");
-      setNewRole("developer");
-      toast.success("Member added to project.");
+      toast.success("Member added");
     } catch (err) {
-      toast.error(err.message);
+      setAddError(err.message);
     } finally {
       setAdding(false);
     }
   }
 
-  async function handleRoleChange(userId, updatedRole) {
+  async function handleRoleChange(userId, nextRole) {
     setBusyUserId(userId);
     try {
       const data = await api.patch(
         `/projects/${project._id}/members/${userId}`,
-        { role: updatedRole }
+        { role: nextRole }
       );
       setProject(data.project);
-      toast.success("Member role updated.");
+      toast.success("Role updated");
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -67,7 +77,7 @@ export default function ProjectMembersPage() {
         `/projects/${project._id}/members/${removeTarget._id}`
       );
       setProject(data.project);
-      toast.success(`Removed ${removeTarget.name} from the project.`);
+      toast.success("Member removed");
       setRemoveTarget(null);
     } catch (err) {
       toast.error(err.message);
@@ -76,140 +86,173 @@ export default function ProjectMembersPage() {
     }
   }
 
+  const members = project.members || [];
+
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-4 max-w-4xl">
       {isOwner && (
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-base font-semibold text-slate-900">Add Team Member</h2>
-          <p className="mt-1 text-xs text-slate-500">
-            Invite an existing Bug Tracker user by their account email.
-          </p>
+        <section className="rounded-panel border border-line bg-surface p-4">
+          <h2 className="font-mono text-[11px] font-medium uppercase tracking-wider text-ink-muted mb-3">
+            Add member
+          </h2>
+
+          {addError && (
+            <div className="mb-3">
+              <AlertBanner message={addError} />
+            </div>
+          )}
 
           <form
             onSubmit={handleAddMember}
-            className="mt-4 flex flex-col sm:flex-row gap-3"
+            className="flex flex-col sm:flex-row sm:items-end gap-2.5"
           >
             <div className="flex-1">
-              <label htmlFor="member-email" className="sr-only">
-                Teammate email
-              </label>
-              <input
+              <FieldLabel htmlFor="member-email">Email</FieldLabel>
+              <Input
                 id="member-email"
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="teammate@example.com"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                placeholder="teammate@company.com"
               />
             </div>
 
-            <div>
-              <label htmlFor="member-role" className="sr-only">
-                Role
-              </label>
-              <select
+            <div className="w-full sm:w-40">
+              <FieldLabel htmlFor="member-role">Role</FieldLabel>
+              <Select
                 id="member-role"
                 value={newRole}
                 onChange={(e) => setNewRole(e.target.value)}
-                className="w-full sm:w-36 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
               >
                 <option value="developer">Developer</option>
                 <option value="viewer">Viewer</option>
-              </select>
+              </Select>
             </div>
 
-            <button
-              type="submit"
-              disabled={adding}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
-            >
-              {adding ? "Adding..." : "Add Member"}
-            </button>
+            <Button type="submit" variant="primary" disabled={adding}>
+              <UserPlus size={14} strokeWidth={1.75} aria-hidden="true" />
+              <span>{adding ? "Adding..." : "Add member"}</span>
+            </Button>
           </form>
         </section>
       )}
 
-      <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900">
-            Team Members ({1 + (project.members?.length || 0)})
+      <section className="rounded-panel border border-line bg-surface overflow-x-auto">
+        <div className="px-4 py-3 border-b border-line flex items-center justify-between">
+          <h2 className="font-mono text-[11px] font-medium uppercase tracking-wider text-ink-muted">
+            Members
           </h2>
+          <span className="font-mono text-xs tabular-nums text-ink-subtle">
+            {members.length + 1}
+          </span>
         </div>
 
-        <ul className="divide-y divide-slate-200">
-          {project.owner && (
-            <li className="px-5 py-4 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <UserAvatar user={project.owner} size="md" />
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-slate-900 truncate">
-                    {project.owner.name}
-                  </p>
-                  <p className="text-xs text-slate-500 truncate">
-                    {project.owner.email}
-                  </p>
-                </div>
-              </div>
-              <RoleBadge role="owner" />
-            </li>
-          )}
-
-          {(project.members || []).map((entry) => {
-            const memberUser = entry.user;
-            if (!memberUser) return null;
-            const isBusy = busyUserId === memberUser._id;
-
-            return (
-              <li
-                key={memberUser._id}
-                className="px-5 py-4 flex flex-wrap items-center justify-between gap-3"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <UserAvatar user={memberUser} size="md" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-900 truncate">
-                      {memberUser.name}
+        <table className="min-w-full divide-y divide-line text-left">
+          <thead className="bg-well">
+            <tr>
+              <th className="px-4 py-2 font-mono text-[11px] font-medium uppercase tracking-wider text-ink-muted">
+                User
+              </th>
+              <th className="px-4 py-2 font-mono text-[11px] font-medium uppercase tracking-wider text-ink-muted">
+                Role
+              </th>
+              <th className="px-4 py-2 font-mono text-[11px] font-medium uppercase tracking-wider text-ink-muted">
+                Added
+              </th>
+              {isOwner && (
+                <th className="px-4 py-2 text-right font-mono text-[11px] font-medium uppercase tracking-wider text-ink-muted">
+                  Action
+                </th>
+              )}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            <tr>
+              <td className="px-4 py-2.5">
+                <div className="flex items-center gap-2.5">
+                  <UserAvatar user={project.owner} size="sm" />
+                  <div>
+                    <p className="text-sm font-medium text-ink">
+                      {project.owner?.name}
                     </p>
-                    <p className="text-xs text-slate-500 truncate">
-                      {memberUser.email}
+                    <p className="text-xs text-ink-muted">
+                      {project.owner?.email}
                     </p>
                   </div>
                 </div>
+              </td>
+              <td className="px-4 py-2.5">
+                <RoleBadge role="owner" />
+              </td>
+              <td className="px-4 py-2.5">
+                <RelativeTime date={project.createdAt} />
+              </td>
+              {isOwner && (
+                <td className="px-4 py-2.5 text-right text-xs text-ink-subtle">
+                  Owner
+                </td>
+              )}
+            </tr>
 
-                {isOwner ? (
-                  <div className="flex items-center gap-2">
-                    <label htmlFor={`role-${memberUser._id}`} className="sr-only">
-                      Role for {memberUser.name}
-                    </label>
-                    <select
-                      id={`role-${memberUser._id}`}
-                      value={entry.role}
-                      disabled={isBusy}
-                      onChange={(e) =>
-                        handleRoleChange(memberUser._id, e.target.value)
-                      }
-                      className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:opacity-50"
-                    >
-                      <option value="developer">Developer</option>
-                      <option value="viewer">Viewer</option>
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => setRemoveTarget(memberUser)}
-                      disabled={isBusy}
-                      className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ) : (
-                  <RoleBadge role={entry.role} />
-                )}
-              </li>
-            );
-          })}
-        </ul>
+            {members.map((member) => {
+              const memberUser = member.user;
+              if (!memberUser) return null;
+              const isBusy = busyUserId === memberUser._id;
+
+              return (
+                <tr key={memberUser._id}>
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <UserAvatar user={memberUser} size="sm" />
+                      <div>
+                        <p className="text-sm font-medium text-ink">
+                          {memberUser.name}
+                        </p>
+                        <p className="text-xs text-ink-muted">
+                          {memberUser.email}
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    {isOwner ? (
+                      <Select
+                        aria-label={`Role for ${memberUser.name}`}
+                        disabled={isBusy}
+                        value={member.role}
+                        onChange={(e) =>
+                          handleRoleChange(memberUser._id, e.target.value)
+                        }
+                        className="w-32 py-1 text-xs"
+                      >
+                        <option value="developer">Developer</option>
+                        <option value="viewer">Viewer</option>
+                      </Select>
+                    ) : (
+                      <RoleBadge role={member.role} />
+                    )}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <RelativeTime date={project.createdAt} />
+                  </td>
+                  {isOwner && (
+                    <td className="px-4 py-2.5 text-right">
+                      <Button
+                        variant="danger-quiet"
+                        size="sm"
+                        disabled={isBusy}
+                        onClick={() => setRemoveTarget(memberUser)}
+                      >
+                        Remove
+                      </Button>
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </section>
 
       <ConfirmDialog
@@ -217,13 +260,13 @@ export default function ProjectMembersPage() {
         onClose={() => setRemoveTarget(null)}
         onConfirm={handleConfirmRemove}
         loading={removing}
-        title="Remove Team Member"
-        confirmLabel="Remove"
+        title="Remove member?"
         message={
           removeTarget
-            ? `Remove ${removeTarget.name} from "${project.title}"? Any tickets assigned to them will become unassigned.`
+            ? `Remove ${removeTarget.name} from ${project.title}. They will lose access immediately.`
             : ""
         }
+        confirmLabel="Remove member"
       />
     </div>
   );

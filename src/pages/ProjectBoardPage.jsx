@@ -19,6 +19,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { MessageSquare, Plus } from "lucide-react";
 import api from "../api/client.js";
 import { useProjectLiveUpdates } from "../context/SocketContext.jsx";
 import { useToast } from "../context/ToastContext.jsx";
@@ -26,12 +27,18 @@ import { useProject } from "./ProjectLayout.jsx";
 import TicketFilterBar from "../components/TicketFilterBar.jsx";
 import TicketFormModal from "../components/TicketFormModal.jsx";
 import { PriorityBadge, TypeBadge, UserAvatar } from "../components/badges.jsx";
+import { AlertBanner, Button } from "../components/ui.jsx";
+import { getProjectRouteId, getTicketRouteId } from "../utils/format.js";
 import usePageTitle from "../utils/usePageTitle.js";
+import {
+  setPreferredProjectView,
+  useTicketShortcuts,
+} from "../utils/viewPrefs.js";
 
 const COLUMNS = [
-  { id: "todo", title: "To Do", accent: "bg-slate-400" },
-  { id: "in-progress", title: "In Progress", accent: "bg-amber-500" },
-  { id: "done", title: "Done", accent: "bg-emerald-500" },
+  { id: "todo", title: "TO DO" },
+  { id: "in-progress", title: "IN PROGRESS" },
+  { id: "done", title: "DONE" },
 ];
 
 function groupTicketsByStatus(tickets) {
@@ -47,30 +54,35 @@ function groupTicketsByStatus(tickets) {
 function TicketCardContent({ ticket, isGhost = false }) {
   return (
     <div
-      className={`rounded-lg border bg-white p-3.5 transition-shadow ${
+      className={`rounded-control border bg-surface p-2.5 transition-colors duration-150 ${
         isGhost
-          ? "border-indigo-400 shadow-xl ring-2 ring-indigo-500/30 rotate-1"
-          : "border-slate-200 shadow-xs hover:border-indigo-300 hover:shadow-sm"
+          ? "border-accent shadow-card"
+          : "border-line hover:border-line-strong"
       }`}
     >
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <TypeBadge type={ticket.type} compact />
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <TypeBadge type={ticket.type} compact />
+          <span className="font-mono text-[11px] font-medium text-ink-muted">
+            {ticket.key || ticket._id.slice(-6).toUpperCase()}
+          </span>
+        </div>
         <PriorityBadge priority={ticket.priority} />
       </div>
 
-      <h3 className="text-sm font-medium text-slate-900 line-clamp-2 leading-snug">
+      <h3 className="text-[13px] font-medium text-ink line-clamp-2 leading-snug">
         {ticket.title}
       </h3>
 
-      <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+      <div className="mt-2.5 pt-2 border-t border-line/70 flex items-center justify-between text-xs text-ink-muted">
         <span
-          className="inline-flex items-center gap-1"
+          className="inline-flex items-center gap-1 font-mono text-[11px] tabular-nums"
           title={`${ticket.commentCount || 0} comments`}
         >
-          <span aria-hidden="true">💬</span>
+          <MessageSquare size={12} strokeWidth={1.75} aria-hidden="true" />
           <span>{ticket.commentCount || 0}</span>
         </span>
-        <UserAvatar user={ticket.assignee} />
+        <UserAvatar user={ticket.assignee} size="xs" />
       </div>
     </div>
   );
@@ -98,72 +110,47 @@ function SortableTicketCard({ ticket, canDrag, onOpen }) {
     <div
       ref={setNodeRef}
       style={style}
-      {...(canDrag ? attributes : {})}
+      {...attributes}
       {...(canDrag ? listeners : {})}
-      onClick={() => {
-        if (!isDragging) onOpen(ticket._id);
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          onOpen(ticket._id);
-        }
-      }}
-      role="button"
-      tabIndex={0}
-      aria-label={`Open ticket ${ticket.title}`}
-      className={`rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+      onClick={() => onOpen(ticket)}
+      className={`outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded-control ${
         canDrag ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
-      } ${isDragging ? "opacity-35 ring-2 ring-dashed ring-indigo-400" : ""}`}
+      } ${isDragging ? "opacity-35" : ""}`}
     >
       <TicketCardContent ticket={ticket} />
     </div>
   );
 }
 
-function KanbanColumn({ column, items, canDrag, onOpenTicket }) {
-  const { setNodeRef, isOver } = useDroppable({
-    id: column.id,
-  });
+function BoardColumn({ column, tickets, canDrag, onOpenTicket }) {
+  const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
   return (
     <section
-      aria-label={column.title}
-      className={`flex flex-col rounded-xl border p-3 min-w-[285px] w-80 lg:w-auto lg:flex-1 shrink-0 transition-colors ${
-        isOver
-          ? "border-indigo-400 bg-indigo-50/50"
-          : "border-slate-200 bg-slate-100/70"
+      className={`flex flex-col rounded-panel border bg-well min-h-[26rem] transition-colors duration-150 ${
+        isOver ? "border-accent bg-well-hover" : "border-line"
       }`}
     >
-      <div className="flex items-center justify-between px-1 pb-3">
-        <div className="flex items-center gap-2">
-          <span className={`h-2.5 w-2.5 rounded-full ${column.accent}`} />
-          <h3 className="text-sm font-semibold text-slate-800">{column.title}</h3>
-        </div>
-        <span className="inline-flex min-w-[1.5rem] justify-center rounded-full bg-white border border-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-600">
-          {items.length}
+      <header className="px-3 py-2.5 border-b border-line flex items-center gap-2">
+        <h2 className="font-mono text-[11px] font-semibold tracking-wider text-ink-muted">
+          {column.title}
+        </h2>
+        <span className="font-mono text-[11px] tabular-nums text-ink-subtle">
+          {tickets.length}
         </span>
-      </div>
+      </header>
 
-      <SortableContext
-        items={items.map((t) => t._id)}
-        strategy={verticalListSortingStrategy}
-      >
-        <div
-          ref={setNodeRef}
-          className="flex-1 space-y-2.5 min-h-[140px]"
+      <div ref={setNodeRef} className="flex-1 p-2 space-y-2">
+        <SortableContext
+          items={tickets.map((t) => t._id)}
+          strategy={verticalListSortingStrategy}
         >
-          {items.length === 0 ? (
-            <div
-              className={`h-24 rounded-lg border border-dashed flex items-center justify-center text-xs ${
-                isOver
-                  ? "border-indigo-400 bg-indigo-50 text-indigo-700 font-medium"
-                  : "border-slate-300 text-slate-400"
-              }`}
-            >
-              {isOver ? "Drop ticket here" : "No tickets"}
+          {tickets.length === 0 ? (
+            <div className="h-24 rounded-control border border-dashed border-line flex items-center justify-center text-xs text-ink-subtle">
+              No tickets
             </div>
           ) : (
-            items.map((ticket) => (
+            tickets.map((ticket) => (
               <SortableTicketCard
                 key={ticket._id}
                 ticket={ticket}
@@ -172,20 +159,46 @@ function KanbanColumn({ column, items, canDrag, onOpenTicket }) {
               />
             ))
           )}
-        </div>
-      </SortableContext>
+        </SortableContext>
+      </div>
     </section>
   );
 }
 
 export default function ProjectBoardPage() {
   const { project, role, membersList } = useProject();
-  usePageTitle(`${project.title} · Board`);
-  const toast = useToast();
   const navigate = useNavigate();
+  const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
+  usePageTitle(`${project.key || project.title} Board`);
 
-  const canDrag = role === "owner" || role === "developer";
+  const projectSlug = getProjectRouteId(project);
+  const canCreate = role === "owner" || role === "developer";
+  const canDrag = canCreate;
+
+  const searchRef = useRef(null);
+  const [columns, setColumns] = useState({
+    todo: [],
+    "in-progress": [],
+    done: [],
+  });
+  const [totals, setTotals] = useState({ shown: 0, projectTotal: 0 });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [activeId, setActiveId] = useState(null);
+  const snapshotRef = useRef(null);
+
+  useEffect(() => {
+    setPreferredProjectView(project, "board");
+  }, [project]);
+
+  useTicketShortcuts({
+    canCreate,
+    onNewTicket: () => setModalOpen(true),
+    searchRef,
+    modalOpen,
+  });
 
   const filters = useMemo(
     () => ({
@@ -199,20 +212,10 @@ export default function ProjectBoardPage() {
     [searchParams]
   );
 
-  const [columns, setColumns] = useState({
-    todo: [],
-    "in-progress": [],
-    done: [],
-  });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [formOpen, setFormOpen] = useState(false);
-
-  const [activeId, setActiveId] = useState(null);
-  const snapshotRef = useRef(null);
-
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 6 },
+    }),
     useSensor(TouchSensor, {
       activationConstraint: { delay: 180, tolerance: 6 },
     }),
@@ -238,7 +241,12 @@ export default function ProjectBoardPage() {
         const data = await api.get(
           `/projects/${project._id}/tickets?${qs.toString()}`
         );
-        setColumns(groupTicketsByStatus(data.tickets || []));
+        const list = data.tickets || [];
+        setColumns(groupTicketsByStatus(list));
+        setTotals({
+          shown: data.pagination?.total ?? list.length,
+          projectTotal: data.pagination?.projectTotal ?? list.length,
+        });
       } catch (err) {
         if (!silent) setError(err.message);
       } finally {
@@ -372,7 +380,6 @@ export default function ProjectBoardPage() {
 
     if (finalPosition === -1) return;
 
-    // Skip server call if nothing actually moved
     const prevCol = prevSnapshot ? findContainer(prevSnapshot, active.id) : null;
     const prevPos =
       prevCol && prevSnapshot
@@ -403,32 +410,40 @@ export default function ProjectBoardPage() {
     }
   }
 
-  const activeTicket = activeId
-    ? [...columns.todo, ...columns["in-progress"], ...columns.done].find(
-        (t) => t._id === activeId
-      )
-    : null;
+  const allTickets = [
+    ...columns.todo,
+    ...columns["in-progress"],
+    ...columns.done,
+  ];
+  const activeTicket = allTickets.find((t) => t._id === activeId) || null;
+  const countSummary = `${totals.shown} of ${totals.projectTotal} tickets`;
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">Kanban Board</h2>
-          {!canDrag && (
-            <p className="text-xs text-slate-500">
-              Viewer mode: drag and drop is disabled.
-            </p>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+        <p className="text-xs text-ink-muted">
+          {canDrag ? (
+            <>
+              Drag cards to change status or column order. Press{" "}
+              <kbd className="rounded-badge border border-line bg-well px-1 py-0.5 text-[10px] text-ink">
+                C
+              </kbd>{" "}
+              to create a ticket.
+            </>
+          ) : (
+            "Read-only viewer access for this project."
           )}
-        </div>
+        </p>
 
-        {canDrag && (
-          <button
-            type="button"
-            onClick={() => setFormOpen(true)}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        {canCreate && (
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setModalOpen(true)}
           >
-            + New Ticket
-          </button>
+            <Plus size={14} strokeWidth={2} aria-hidden="true" />
+            <span>Create ticket</span>
+          </Button>
         )}
       </div>
 
@@ -437,51 +452,48 @@ export default function ProjectBoardPage() {
         onChangeFilter={handleFilterChange}
         onClear={handleClearFilters}
         membersList={membersList}
-        defaultSortLabel="Board Order"
+        defaultSortLabel="Board order"
+        searchRef={searchRef}
+        countSummary={!loading ? countSummary : ""}
       />
 
+      {error && (
+        <div className="mb-4">
+          <AlertBanner message={error} onRetry={() => loadBoardTickets()} />
+        </div>
+      )}
+
       {loading ? (
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           {COLUMNS.map((col) => (
             <div
               key={col.id}
-              className="min-w-[285px] w-80 lg:w-auto lg:flex-1 rounded-xl border border-slate-200 bg-slate-100/70 p-3 space-y-2.5 animate-pulse"
+              className="rounded-panel border border-line bg-well p-2.5 min-h-[22rem] space-y-2"
             >
-              <div className="h-5 w-28 rounded bg-slate-200 mb-3" />
-              <div className="h-24 rounded-lg bg-white" />
-              <div className="h-24 rounded-lg bg-white" />
+              <div className="h-4 w-24 rounded bg-surface" />
+              <div className="h-20 rounded-control border border-line bg-surface" />
+              <div className="h-20 rounded-control border border-line bg-surface" />
             </div>
           ))}
         </div>
-      ) : error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center">
-          <p className="text-sm font-medium text-red-800">{error}</p>
-          <button
-            type="button"
-            onClick={loadBoardTickets}
-            className="mt-3 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
-          >
-            Retry
-          </button>
-        </div>
       ) : (
         <DndContext
-          sensors={canDrag ? sensors : []}
+          sensors={sensors}
           collisionDetection={closestCorners}
           onDragStart={handleDragStart}
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
           onDragCancel={handleDragCancel}
         >
-          <div className="flex gap-4 overflow-x-auto pb-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
             {COLUMNS.map((column) => (
-              <KanbanColumn
+              <BoardColumn
                 key={column.id}
                 column={column}
-                items={columns[column.id]}
+                tickets={columns[column.id]}
                 canDrag={canDrag}
-                onOpenTicket={(ticketId) =>
-                  navigate(`/projects/${project._id}/tickets/${ticketId}`)
+                onOpenTicket={(t) =>
+                  navigate(`/projects/${projectSlug}/tickets/${getTicketRouteId(t)}`)
                 }
               />
             ))}
@@ -494,11 +506,11 @@ export default function ProjectBoardPage() {
       )}
 
       <TicketFormModal
-        open={formOpen}
-        onClose={() => setFormOpen(false)}
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
         projectId={project._id}
         membersList={membersList}
-        onSaved={() => loadBoardTickets()}
+        onSaved={() => loadBoardTickets({ silent: true })}
       />
     </div>
   );

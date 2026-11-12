@@ -1,4 +1,5 @@
 import Modal from "./Modal.jsx";
+import { Button } from "./ui.jsx";
 
 export default function ConfirmDialog({
   open,
@@ -12,30 +13,19 @@ export default function ConfirmDialog({
 }) {
   return (
     <Modal open={open} onClose={onClose} title={title} maxWidth="max-w-md">
-      <p className="text-sm text-slate-600">{message}</p>
-      <div className="mt-6 flex items-center justify-end gap-3">
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={loading}
-          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
-        >
+      <p className="text-sm text-ink-muted leading-relaxed">{message}</p>
+      <div className="mt-5 flex items-center justify-end gap-2">
+        <Button variant="quiet" onClick={onClose} disabled={loading}>
           Cancel
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant={danger ? "danger" : "primary"}
           onClick={onConfirm}
           disabled={loading}
-          className={`rounded-lg px-4 py-2 text-sm font-semibold text-white focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 ${
-            danger
-              ? "bg-red-600 hover:bg-red-700 focus:ring-red-500"
-              : "bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500"
-          }`}
         >
           {loading ? "Working..." : confirmLabel}
-        </button>
+        </Button>
       </div>
     </Modal>
   );
 }
-

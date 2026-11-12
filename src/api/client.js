@@ -64,7 +64,9 @@ export async function request(path, options = {}) {
   }
 
   if (!response.ok || !payload?.success) {
-    throw new Error(payload?.message || "Something went wrong. Please try again.");
+    throw new Error(
+      payload?.message || "Request failed. Check your connection and try again."
+    );
   }
 
   return payload.data;
@@ -111,7 +113,11 @@ export function uploadWithProgress(path, formData, onProgress) {
       }
 
       if (xhr.status < 200 || xhr.status >= 300 || !payload?.success) {
-        reject(new Error(payload?.message || "Upload failed. Please try again."));
+        reject(
+          new Error(
+            payload?.message || "Upload failed. Check your connection and try again."
+          )
+        );
         return;
       }
 
@@ -119,7 +125,9 @@ export function uploadWithProgress(path, formData, onProgress) {
     };
 
     xhr.onerror = () => {
-      reject(new Error("Network error while uploading files."));
+      reject(
+        new Error("Could not upload files. Check your connection and try again.")
+      );
     };
 
     xhr.send(formData);

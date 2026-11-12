@@ -3,9 +3,16 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useToast } from "../context/ToastContext.jsx";
 import usePageTitle from "../utils/usePageTitle.js";
+import {
+  AlertBanner,
+  Button,
+  FieldLabel,
+  Input,
+  Wordmark,
+} from "../components/ui.jsx";
 
 export default function RegisterPage() {
-  usePageTitle("Create Account");
+  usePageTitle("Create account");
   const { register } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
@@ -21,11 +28,11 @@ export default function RegisterPage() {
     setError("");
 
     if (!name.trim()) {
-      setError("Name is required.");
+      setError("Full name is required.");
       return;
     }
     if (!email.trim() || !/^\S+@\S+\.\S+$/.test(email.trim())) {
-      setError("Please enter a valid email address.");
+      setError("Enter a valid email address.");
       return;
     }
     if (password.length < 6) {
@@ -36,7 +43,7 @@ export default function RegisterPage() {
     setSubmitting(true);
     try {
       await register(name.trim(), email.trim(), password);
-      toast.success("Account created successfully!");
+      toast.success("Account created");
       navigate("/", { replace: true });
     } catch (err) {
       setError(err.message);
@@ -46,99 +53,75 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-slate-50 px-4 py-12">
-      <div className="w-full max-w-md bg-white border border-slate-200 rounded-xl shadow-sm p-6 sm:p-8">
-        <div className="mb-6 text-center">
-          <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600 text-white font-bold text-lg mb-3">
-            BT
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900">Create your account</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Join your team on Bug Tracker.
+    <main className="min-h-screen flex items-center justify-center bg-paper px-4 py-8">
+      <div className="w-full max-w-sm bg-surface border border-line-strong rounded-panel p-6">
+        <div className="mb-5">
+          <Wordmark />
+          <h1 className="mt-4 text-lg font-semibold text-ink">Create account</h1>
+          <p className="mt-0.5 text-xs text-ink-muted">
+            Register to create projects or join an existing workspace.
           </p>
         </div>
 
-        {error && (
-          <div
-            role="alert"
-            className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3.5 py-2.5 text-sm text-red-700"
-          >
-            {error}
-          </div>
-        )}
+        <div className="space-y-3">
+          <AlertBanner message={error} />
 
-        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-          <div>
-            <label
-              htmlFor="register-name"
-              className="block text-sm font-medium text-slate-700 mb-1"
+          <form onSubmit={handleSubmit} className="space-y-3" noValidate>
+            <div>
+              <FieldLabel htmlFor="register-name">Full name</FieldLabel>
+              <Input
+                id="register-name"
+                type="text"
+                autoComplete="name"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Maya Lin"
+              />
+            </div>
+
+            <div>
+              <FieldLabel htmlFor="register-email">Email</FieldLabel>
+              <Input
+                id="register-email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="name@company.com"
+              />
+            </div>
+
+            <div>
+              <FieldLabel htmlFor="register-password">Password</FieldLabel>
+              <Input
+                id="register-password"
+                type="password"
+                autoComplete="new-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Minimum 6 characters"
+              />
+            </div>
+
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={submitting}
+              className="w-full"
             >
-              Full name
-            </label>
-            <input
-              id="register-name"
-              type="text"
-              autoComplete="name"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Alex Rivera"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-            />
-          </div>
+              {submitting ? "Creating account..." : "Create account"}
+            </Button>
+          </form>
+        </div>
 
-          <div>
-            <label
-              htmlFor="register-email"
-              className="block text-sm font-medium text-slate-700 mb-1"
-            >
-              Email
-            </label>
-            <input
-              id="register-email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="register-password"
-              className="block text-sm font-medium text-slate-700 mb-1"
-            >
-              Password
-            </label>
-            <input
-              id="register-password"
-              type="password"
-              autoComplete="new-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="At least 6 characters"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-          >
-            {submitting ? "Creating account..." : "Create account"}
-          </button>
-        </form>
-
-        <p className="mt-6 text-center text-sm text-slate-600">
-          Already have an account?{" "}
+        <p className="mt-5 pt-4 border-t border-line text-xs text-ink-muted">
+          Already registered?{" "}
           <Link
             to="/login"
-            className="font-semibold text-indigo-600 hover:text-indigo-500"
+            className="font-medium text-accent hover:text-accent-hover focus-visible:outline-none focus-visible:underline"
           >
             Sign in
           </Link>

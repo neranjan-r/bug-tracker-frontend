@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import api from "../api/client.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useProjectLiveUpdates } from "../context/SocketContext.jsx";
@@ -8,22 +9,74 @@ import { useProject } from "./ProjectLayout.jsx";
 import TicketFilterBar from "../components/TicketFilterBar.jsx";
 import TicketFormModal from "../components/TicketFormModal.jsx";
 import ConfirmDialog from "../components/ConfirmDialog.jsx";
-import usePageTitle from "../utils/usePageTitle.js";
 import {
   PriorityBadge,
   StatusBadge,
   TypeBadge,
   UserAvatar,
 } from "../components/badges.jsx";
+import { AlertBanner, Button, EmptyState, RelativeTime } from "../components/ui.jsx";
+import { getProjectRouteId, getTicketRouteId } from "../utils/format.js";
+import usePageTitle from "../utils/usePageTitle.js";
+import {
+  setPreferredProjectView,
+  useTicketShortcuts,
+} from "../utils/viewPrefs.js";
+
+function SortHeader({ label, ascKey, descKey, currentSort, onSort }) {
+  const isAsc = currentSort === ascKey;
+  const isDesc = currentSort === descKey;
+  const nextSort = isAsc ? descKey : isDesc ? "" : ascKey;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSort("sort", nextSort)}
+      className="inline-flex items-center gap-1 font-mono text-[11px] font-medium uppercase tracking-wider text-ink-muted hover:text-ink cursor-pointer"
+    >
+      <span>{label}</span>
+      {isAsc && <ArrowUp size={11} strokeWidth={2} aria-hidden="true" />}
+      {isDesc && <ArrowDown size={11} strokeWidth={2} aria-hidden="true" />}
+    </button>
+  );
+}
 
 export default function ProjectListPage() {
   const { project, role, membersList } = useProject();
-  usePageTitle(`${project.title} · List`);
   const { user } = useAuth();
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
+  usePageTitle(`${project.key || project.title} Tickets`);
 
-  const canCreateOrEdit = role === "owner" || role === "developer";
+  const projectSlug = getProjectRouteId(project);
+  const canCreate = role === "owner" || role === "developer";
+
+  const searchRef = useRef(null);
+  const [tickets, setTickets] = useState([]);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 12,
+    total: 0,
+    projectTotal: 0,
+    totalPages: 1,
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
+
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    setPreferredProjectView(project, "list");
+  }, [project]);
+
+  useTicketShortcuts({
+    canCreate,
+    onNewTicket: () => setModalOpen(true),
+    searchRef,
+    modalOpen: modalOpen || Boolean(deleteTarget),
+  });
 
   const filters = useMemo(
     () => ({
@@ -33,25 +86,10 @@ export default function ProjectListPage() {
       type: searchParams.get("type") || "",
       assignee: searchParams.get("assignee") || "",
       sort: searchParams.get("sort") || "",
-      page: Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1),
+      page: Number(searchParams.get("page")) || 1,
     }),
     [searchParams]
   );
-
-  const [tickets, setTickets] = useState([]);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 10,
-    total: 0,
-    totalPages: 1,
-  });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  const [formOpen, setFormOpen] = useState(false);
-  const [editingTicket, setEditingTicket] = useState(null);
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const [deleting, setDeleting] = useState(false);
 
   const loadTickets = useCallback(
     async ({ silent = false } = {}) => {
@@ -66,12 +104,20 @@ export default function ProjectListPage() {
         if (filters.assignee) qs.set("assignee", filters.assignee);
         if (filters.sort) qs.set("sort", filters.sort);
         qs.set("page", String(filters.page));
-        qs.set("limit", "10");
+        qs.set("limit", "12");
 
-        const data = await api.get(`/projects/${project._id}/tickets?${qs.toString()}`);
+        const data = await api.get(
+          `/projects/${project._id}/tickets?${qs.toString()}`
+        );
         setTickets(data.tickets || []);
         setPagination(
-          data.pagination || { page: 1, limit: 10, total: 0, totalPages: 1 }
+          data.pagination || {
+            page: 1,
+            limit: 12,
+            total: 0,
+            projectTotal: 0,
+            totalPages: 1,
+          }
         );
       } catch (err) {
         if (!silent) setError(err.message);
@@ -123,9 +169,9 @@ export default function ProjectListPage() {
     setDeleting(true);
     try {
       await api.delete(`/tickets/${deleteTarget._id}`);
-      toast.success("Ticket deleted.");
+      toast.success(`Ticket ${deleteTarget.key || ""} deleted`.trim());
       setDeleteTarget(null);
-      loadTickets();
+      loadTickets({ silent: true });
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -133,35 +179,34 @@ export default function ProjectListPage() {
     }
   }
 
-  const hasFilters = Boolean(
-    filters.search ||
-      filters.status ||
-      filters.priority ||
-      filters.type ||
-      filters.assignee
-  );
+  const totalCount = pagination.total ?? tickets.length;
+  const projectTotal = pagination.projectTotal ?? totalCount;
+  const countSummary = `${totalCount} of ${projectTotal} tickets`;
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">Tickets List</h2>
-          <p className="text-xs text-slate-500">
-            {pagination.total} {pagination.total === 1 ? "ticket" : "tickets"} found
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+        <p className="text-xs text-ink-muted">
+          Click any column header to sort. Press{" "}
+          <kbd className="rounded-badge border border-line bg-well px-1 py-0.5 text-[10px] text-ink">
+            /
+          </kbd>{" "}
+          to search or{" "}
+          <kbd className="rounded-badge border border-line bg-well px-1 py-0.5 text-[10px] text-ink">
+            C
+          </kbd>{" "}
+          to create a ticket.
+        </p>
 
-        {canCreateOrEdit && (
-          <button
-            type="button"
-            onClick={() => {
-              setEditingTicket(null);
-              setFormOpen(true);
-            }}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        {canCreate && (
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setModalOpen(true)}
           >
-            + New Ticket
-          </button>
+            <Plus size={14} strokeWidth={2} aria-hidden="true" />
+            <span>Create ticket</span>
+          </Button>
         )}
       </div>
 
@@ -170,241 +215,215 @@ export default function ProjectListPage() {
         onChangeFilter={handleFilterChange}
         onClear={handleClearFilters}
         membersList={membersList}
+        defaultSortLabel="Newest"
+        searchRef={searchRef}
+        countSummary={!loading ? countSummary : ""}
       />
 
+      {error && (
+        <div className="mb-4">
+          <AlertBanner message={error} onRetry={() => loadTickets()} />
+        </div>
+      )}
+
       {loading ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-6 space-y-3 animate-pulse">
-          {[1, 2, 3, 4].map((row) => (
-            <div key={row} className="h-10 rounded bg-slate-100" />
+        <div className="rounded-panel border border-line bg-surface overflow-hidden">
+          <div className="border-b border-line bg-well px-3 py-2 flex gap-4">
+            <div className="h-3 w-12 rounded bg-line" />
+            <div className="h-3 w-40 rounded bg-line" />
+            <div className="h-3 w-16 rounded bg-line ml-auto" />
+          </div>
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div
+              key={i}
+              className="px-3 py-2.5 border-b border-line last:border-b-0 flex items-center gap-4"
+            >
+              <div className="h-3.5 w-14 rounded bg-well shrink-0" />
+              <div className="h-3.5 w-2/5 rounded bg-well" />
+              <div className="h-3.5 w-16 rounded bg-well ml-auto shrink-0" />
+              <div className="h-3.5 w-20 rounded bg-well shrink-0" />
+              <div className="h-5 w-5 rounded-badge bg-well shrink-0" />
+            </div>
           ))}
         </div>
-      ) : error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center">
-          <p className="text-sm font-medium text-red-800">{error}</p>
-          <button
-            type="button"
-            onClick={loadTickets}
-            className="mt-3 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
-          >
-            Retry
-          </button>
-        </div>
       ) : tickets.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
-          <h3 className="text-base font-semibold text-slate-900">
-            {hasFilters ? "No tickets match your filters" : "No tickets yet"}
-          </h3>
-          <p className="mt-1 text-sm text-slate-600">
-            {hasFilters
-              ? "Try adjusting your search or filter selections."
-              : canCreateOrEdit
-                ? "Create the first ticket for this project."
-                : "There are no tickets in this project yet."}
-          </p>
-          {hasFilters ? (
-            <button
-              type="button"
-              onClick={handleClearFilters}
-              className="mt-4 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              Clear filters
-            </button>
-          ) : (
-            canCreateOrEdit && (
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingTicket(null);
-                  setFormOpen(true);
-                }}
-                className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
-              >
-                + New Ticket
-              </button>
-            )
-          )}
-        </div>
+        <EmptyState
+          message={
+            projectTotal === 0
+              ? "No tickets logged in this project yet."
+              : "No tickets match the current filters."
+          }
+          action={
+            projectTotal === 0 && canCreate ? (
+              <Button variant="primary" size="sm" onClick={() => setModalOpen(true)}>
+                Create first ticket
+              </Button>
+            ) : projectTotal > 0 ? (
+              <Button variant="quiet" size="sm" onClick={handleClearFilters}>
+                Clear filters
+              </Button>
+            ) : null
+          }
+        />
       ) : (
-        <>
-          {/* Desktop table */}
-          <div className="hidden md:block rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3">Title</th>
-                    <th className="px-4 py-3">Type</th>
-                    <th className="px-4 py-3">Priority</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Assignee</th>
-                    <th className="px-4 py-3">Created</th>
-                    {canCreateOrEdit && (
-                      <th className="px-4 py-3 text-right">Actions</th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 text-sm">
-                  {tickets.map((ticket) => (
-                    <tr key={ticket._id} className="hover:bg-slate-50/70">
-                      <td className="px-4 py-3 font-medium text-slate-900 max-w-xs">
-                        <Link
-                          to={`/projects/${project._id}/tickets/${ticket._id}`}
-                          className="hover:text-indigo-600 focus:outline-none focus:underline block truncate"
-                        >
-                          {ticket.title}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <TypeBadge type={ticket.type} />
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <PriorityBadge priority={ticket.priority} />
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <StatusBadge status={ticket.status} />
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        {ticket.assignee ? (
-                          <div className="flex items-center gap-2">
-                            <UserAvatar user={ticket.assignee} />
-                            <span className="text-slate-700 truncate max-w-[130px]">
-                              {ticket.assignee.name}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-slate-400">Unassigned</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-500">
-                        {new Date(ticket.createdAt).toLocaleDateString()}
-                      </td>
-                      {canCreateOrEdit && (
-                        <td className="px-4 py-3 whitespace-nowrap text-right space-x-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingTicket(ticket);
-                              setFormOpen(true);
-                            }}
-                            className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          >
-                            Edit
-                          </button>
-                          {canDeleteTicket(ticket) && (
-                            <button
-                              type="button"
-                              onClick={() => setDeleteTarget(ticket)}
-                              className="rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500"
-                            >
-                              Delete
-                            </button>
-                          )}
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Mobile cards */}
-          <div className="md:hidden space-y-3">
-            {tickets.map((ticket) => (
-              <div
-                key={ticket._id}
-                className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-3"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <Link
-                    to={`/projects/${project._id}/tickets/${ticket._id}`}
-                    className="text-sm font-semibold text-slate-900 hover:text-indigo-600"
-                  >
-                    {ticket.title}
-                  </Link>
-                  <TypeBadge type={ticket.type} compact />
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <StatusBadge status={ticket.status} />
-                  <PriorityBadge priority={ticket.priority} />
-                </div>
-
-                <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <UserAvatar user={ticket.assignee} />
-                    <span>{ticket.assignee?.name || "Unassigned"}</span>
-                  </div>
-                  <span>{new Date(ticket.createdAt).toLocaleDateString()}</span>
-                </div>
-
-                {canCreateOrEdit && (
-                  <div className="flex items-center justify-end gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingTicket(ticket);
-                        setFormOpen(true);
-                      }}
-                      className="rounded-md border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+        <div className="rounded-panel border border-line bg-surface overflow-x-auto">
+          <table className="min-w-full divide-y divide-line text-left">
+            <thead className="sticky top-0 bg-well">
+              <tr>
+                <th className="px-3 py-2 w-24">
+                  <SortHeader
+                    label="Key"
+                    ascKey="key"
+                    descKey="key_desc"
+                    currentSort={filters.sort}
+                    onSort={handleFilterChange}
+                  />
+                </th>
+                <th className="px-3 py-2">
+                  <SortHeader
+                    label="Title"
+                    ascKey="title"
+                    descKey="title_desc"
+                    currentSort={filters.sort}
+                    onSort={handleFilterChange}
+                  />
+                </th>
+                <th className="px-3 py-2 font-mono text-[11px] font-medium uppercase tracking-wider text-ink-muted">
+                  Type
+                </th>
+                <th className="px-3 py-2">
+                  <SortHeader
+                    label="Priority"
+                    ascKey="priority"
+                    descKey="priority_asc"
+                    currentSort={filters.sort}
+                    onSort={handleFilterChange}
+                  />
+                </th>
+                <th className="px-3 py-2">
+                  <SortHeader
+                    label="Status"
+                    ascKey="status"
+                    descKey="status_desc"
+                    currentSort={filters.sort}
+                    onSort={handleFilterChange}
+                  />
+                </th>
+                <th className="px-3 py-2 font-mono text-[11px] font-medium uppercase tracking-wider text-ink-muted">
+                  Assignee
+                </th>
+                <th className="px-3 py-2">
+                  <SortHeader
+                    label="Created"
+                    ascKey="oldest"
+                    descKey="newest"
+                    currentSort={filters.sort}
+                    onSort={handleFilterChange}
+                  />
+                </th>
+                <th className="px-3 py-2 w-10 text-right font-mono text-[11px] font-medium uppercase tracking-wider text-ink-muted">
+                  <span className="sr-only">Actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {tickets.map((ticket) => (
+                <tr
+                  key={ticket._id}
+                  className="hover:bg-well/60 transition-colors duration-150"
+                >
+                  <td className="px-3 py-2 whitespace-nowrap font-mono text-xs text-ink-muted">
+                    <Link
+                      to={`/projects/${projectSlug}/tickets/${getTicketRouteId(ticket)}`}
+                      className="hover:text-accent hover:underline"
                     >
-                      Edit
-                    </button>
+                      {ticket.key || ticket._id.slice(-6).toUpperCase()}
+                    </Link>
+                  </td>
+                  <td className="px-3 py-2 max-w-md">
+                    <Link
+                      to={`/projects/${projectSlug}/tickets/${getTicketRouteId(ticket)}`}
+                      className="text-sm font-medium text-ink hover:text-accent block truncate"
+                    >
+                      {ticket.title}
+                    </Link>
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <TypeBadge type={ticket.type} />
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <PriorityBadge priority={ticket.priority} />
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <StatusBadge status={ticket.status} />
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <div className="flex items-center gap-2 text-xs text-ink-muted">
+                      <UserAvatar user={ticket.assignee} size="xs" />
+                      <span className="truncate max-w-[8rem]">
+                        {ticket.assignee ? ticket.assignee.name : "Unassigned"}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <RelativeTime date={ticket.createdAt} />
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap text-right">
                     {canDeleteTicket(ticket) && (
                       <button
                         type="button"
                         onClick={() => setDeleteTarget(ticket)}
-                        className="rounded-md border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
+                        aria-label={`Delete ${ticket.key || ticket.title}`}
+                        className="inline-flex h-6 w-6 items-center justify-center rounded-badge text-ink-subtle hover:bg-danger-tint hover:text-danger transition-colors duration-150 cursor-pointer"
                       >
-                        Delete
+                        <Trash2 size={13} strokeWidth={1.75} aria-hidden="true" />
                       </button>
                     )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-          {/* Pagination */}
-          {pagination.totalPages > 1 && (
-            <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-              <p className="text-xs text-slate-600">
-                Page {pagination.page} of {pagination.totalPages}
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={pagination.page <= 1}
-                  onClick={() =>
-                    handleFilterChange("page", String(pagination.page - 1))
-                  }
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  Previous
-                </button>
-                <button
-                  type="button"
-                  disabled={pagination.page >= pagination.totalPages}
-                  onClick={() =>
-                    handleFilterChange("page", String(pagination.page + 1))
-                  }
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
-        </>
+      {!loading && pagination.totalPages > 1 && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-ink-muted">
+          <span className="font-mono">
+            Page {pagination.page} of {pagination.totalPages} ({pagination.total}{" "}
+            matching)
+          </span>
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="quiet"
+              size="sm"
+              disabled={pagination.page <= 1}
+              onClick={() =>
+                handleFilterChange("page", String(pagination.page - 1))
+              }
+            >
+              Previous
+            </Button>
+            <Button
+              variant="quiet"
+              size="sm"
+              disabled={pagination.page >= pagination.totalPages}
+              onClick={() =>
+                handleFilterChange("page", String(pagination.page + 1))
+              }
+            >
+              Next
+            </Button>
+          </div>
+        </div>
       )}
 
       <TicketFormModal
-        open={formOpen}
-        onClose={() => setFormOpen(false)}
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
         projectId={project._id}
         membersList={membersList}
-        ticket={editingTicket}
-        onSaved={() => loadTickets()}
+        onSaved={() => loadTickets({ silent: true })}
       />
 
       <ConfirmDialog
@@ -412,13 +431,13 @@ export default function ProjectListPage() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleConfirmDelete}
         loading={deleting}
-        title="Delete Ticket"
-        confirmLabel="Delete Ticket"
+        title={`Delete ${deleteTarget?.key || "ticket"}?`}
         message={
           deleteTarget
-            ? `Are you sure you want to delete "${deleteTarget.title}"? All comments and screenshots on it will also be deleted.`
+            ? `Delete "${deleteTarget.title}" and its comments and attachments. This cannot be undone.`
             : ""
         }
+        confirmLabel="Delete ticket"
       />
     </div>
   );

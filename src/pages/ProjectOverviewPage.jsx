@@ -1,221 +1,174 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import api from "../api/client.js";
-import { useProjectLiveUpdates } from "../context/SocketContext.jsx";
-import usePageTitle from "../utils/usePageTitle.js";
 import { useProject } from "./ProjectLayout.jsx";
+import api from "../api/client.js";
+import { PriorityBadge, StatusBadge } from "../components/badges.jsx";
+import { AlertBanner, Button } from "../components/ui.jsx";
+import { getProjectRouteId } from "../utils/format.js";
+import usePageTitle from "../utils/usePageTitle.js";
 
 export default function ProjectOverviewPage() {
   const { project } = useProject();
-  usePageTitle(`${project.title} · Overview`);
+  usePageTitle(`${project.key || project.title} Overview`);
 
+  const projectSlug = getProjectRouteId(project);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const loadStats = useCallback(
-    async ({ silent = false } = {}) => {
-      if (!silent) setLoading(true);
-      setError("");
-      try {
-        const data = await api.get(`/projects/${project._id}/stats`);
-        setStats(data.stats);
-      } catch (err) {
-        if (!silent) setError(err.message);
-      } finally {
-        if (!silent) setLoading(false);
-      }
-    },
-    [project._id]
-  );
+  const loadStats = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await api.get(`/projects/${project._id}/stats`);
+      setStats(data.stats);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [project._id]);
 
   useEffect(() => {
     loadStats();
   }, [loadStats]);
 
-  useProjectLiveUpdates({
-    onEvent: (eventName) => {
-      if (eventName.startsWith("ticket:")) {
-        loadStats({ silent: true });
-      }
-    },
-    onReconnect: () => loadStats({ silent: true }),
-  });
-
   if (loading) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-pulse">
-        {[1, 2, 3, 4].map((item) => (
-          <div
-            key={item}
-            className="h-28 rounded-xl border border-slate-200 bg-white p-5"
-          />
-        ))}
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[1, 2, 3, 4].map((i) => (
+            <div
+              key={i}
+              className="h-20 rounded-panel border border-line bg-surface p-4"
+            >
+              <div className="h-3 w-20 rounded bg-well" />
+              <div className="mt-3 h-6 w-12 rounded bg-well" />
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="h-44 rounded-panel border border-line bg-surface" />
+          <div className="h-44 rounded-panel border border-line bg-surface" />
+        </div>
       </div>
     );
   }
 
   if (error) {
-    return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center">
-        <p className="text-sm font-medium text-red-800">{error}</p>
-        <button
-          type="button"
-          onClick={loadStats}
-          className="mt-3 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
-        >
-          Retry
-        </button>
-      </div>
-    );
+    return <AlertBanner message={error} onRetry={loadStats} />;
   }
 
   const total = stats?.total || 0;
-  const byStatus = stats?.byStatus || { todo: 0, "in-progress": 0, done: 0 };
-  const byPriority = stats?.byPriority || {
-    low: 0,
-    medium: 0,
-    high: 0,
-    critical: 0,
-  };
-  const assignedToMe = stats?.assignedToMe || 0;
+  const todoCount = stats?.byStatus?.todo || 0;
+  const inProgressCount = stats?.byStatus?.["in-progress"] || 0;
+  const doneCount = stats?.byStatus?.done || 0;
 
   const summaryCards = [
-    {
-      label: "Total Tickets",
-      value: total,
-      to: `/projects/${project._id}/list`,
-      accent: "text-slate-900",
-    },
-    {
-      label: "Assigned to Me",
-      value: assignedToMe,
-      to: `/projects/${project._id}/list?assignee=me`,
-      accent: "text-indigo-600",
-    },
-    {
-      label: "In Progress",
-      value: byStatus["in-progress"],
-      to: `/projects/${project._id}/list?status=in-progress`,
-      accent: "text-amber-600",
-    },
-    {
-      label: "Completed (Done)",
-      value: byStatus.done,
-      to: `/projects/${project._id}/list?status=done`,
-      accent: "text-emerald-600",
-    },
+    { label: "Total tickets", value: total, tone: "text-ink" },
+    { label: "To Do", value: todoCount, tone: "text-ink" },
+    { label: "In Progress", value: inProgressCount, tone: "text-accent" },
+    { label: "Assigned to you", value: stats?.assignedToMe || 0, tone: "text-ink" },
   ];
 
   const statusRows = [
-    { key: "todo", label: "To Do", count: byStatus.todo, bar: "bg-slate-400" },
-    {
-      key: "in-progress",
-      label: "In Progress",
-      count: byStatus["in-progress"],
-      bar: "bg-amber-500",
-    },
-    { key: "done", label: "Done", count: byStatus.done, bar: "bg-emerald-500" },
+    { key: "todo", count: todoCount },
+    { key: "in-progress", count: inProgressCount },
+    { key: "done", count: doneCount },
   ];
 
   const priorityRows = [
-    {
-      key: "critical",
-      label: "Critical",
-      count: byPriority.critical,
-      bar: "bg-red-500",
-    },
-    { key: "high", label: "High", count: byPriority.high, bar: "bg-amber-500" },
-    {
-      key: "medium",
-      label: "Medium",
-      count: byPriority.medium,
-      bar: "bg-sky-500",
-    },
-    { key: "low", label: "Low", count: byPriority.low, bar: "bg-slate-400" },
+    { key: "critical", count: stats?.byPriority?.critical || 0 },
+    { key: "high", count: stats?.byPriority?.high || 0 },
+    { key: "medium", count: stats?.byPriority?.medium || 0 },
+    { key: "low", count: stats?.byPriority?.low || 0 },
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {summaryCards.map((card) => (
-          <Link
+          <div
             key={card.label}
-            to={card.to}
-            className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm hover:border-indigo-300 hover:shadow transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="rounded-panel border border-line bg-surface px-4 py-3"
           >
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            <p className="font-mono text-[11px] uppercase tracking-wider text-ink-muted">
               {card.label}
             </p>
-            <p className={`mt-2 text-3xl font-bold ${card.accent}`}>
+            <p className={`mt-1.5 font-mono text-2xl font-semibold tabular-nums ${card.tone}`}>
               {card.value}
             </p>
-          </Link>
+          </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
-          <h2 className="text-base font-semibold text-slate-900">By Status</h2>
-          <div className="space-y-3">
-            {statusRows.map((row) => {
-              const pct = total > 0 ? Math.round((row.count / total) * 100) : 0;
-              return (
-                <Link
-                  key={row.key}
-                  to={`/projects/${project._id}/list?status=${row.key}`}
-                  className="block group"
-                >
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="font-medium text-slate-700 group-hover:text-indigo-600">
-                      {row.label}
-                    </span>
-                    <span className="text-slate-600 font-semibold">
-                      {row.count}
-                    </span>
-                  </div>
-                  <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                    <div
-                      className={`h-full ${row.bar} transition-all`}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                </Link>
-              );
-            })}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <section className="rounded-panel border border-line bg-surface p-4">
+          <div className="flex items-center justify-between border-b border-line pb-2.5 mb-3">
+            <h2 className="font-mono text-[11px] uppercase tracking-wider font-medium text-ink-muted">
+              By status
+            </h2>
+            <span className="font-mono text-xs text-ink-subtle">{total}</span>
+          </div>
+          <div className="divide-y divide-line">
+            {statusRows.map((row) => (
+              <Link
+                key={row.key}
+                to={`/projects/${projectSlug}/list?status=${row.key}`}
+                className="flex items-center justify-between py-2 hover:bg-well/60 px-1.5 -mx-1.5 rounded-badge transition-colors duration-150"
+              >
+                <StatusBadge status={row.key} />
+                <span className="font-mono text-xs tabular-nums text-ink">
+                  {row.count}
+                </span>
+              </Link>
+            ))}
           </div>
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
-          <h2 className="text-base font-semibold text-slate-900">By Priority</h2>
-          <div className="space-y-3">
-            {priorityRows.map((row) => {
-              const pct = total > 0 ? Math.round((row.count / total) * 100) : 0;
-              return (
-                <Link
-                  key={row.key}
-                  to={`/projects/${project._id}/list?priority=${row.key}`}
-                  className="block group"
-                >
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="font-medium text-slate-700 group-hover:text-indigo-600">
-                      {row.label}
-                    </span>
-                    <span className="text-slate-600 font-semibold">
-                      {row.count}
-                    </span>
-                  </div>
-                  <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                    <div
-                      className={`h-full ${row.bar} transition-all`}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                </Link>
-              );
-            })}
+        <section className="rounded-panel border border-line bg-surface p-4">
+          <div className="flex items-center justify-between border-b border-line pb-2.5 mb-3">
+            <h2 className="font-mono text-[11px] uppercase tracking-wider font-medium text-ink-muted">
+              By priority
+            </h2>
+            <span className="font-mono text-xs text-ink-subtle">{total}</span>
+          </div>
+          <div className="divide-y divide-line">
+            {priorityRows.map((row) => (
+              <Link
+                key={row.key}
+                to={`/projects/${projectSlug}/list?priority=${row.key}`}
+                className="flex items-center justify-between py-2 hover:bg-well/60 px-1.5 -mx-1.5 rounded-badge transition-colors duration-150"
+              >
+                <PriorityBadge priority={row.key} />
+                <span className="font-mono text-xs tabular-nums text-ink">
+                  {row.count}
+                </span>
+              </Link>
+            ))}
           </div>
         </section>
+      </div>
+
+      <div className="rounded-panel border border-line bg-surface px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium text-ink">Quick navigation</p>
+          <p className="text-xs text-ink-muted">
+            Switch to the board to move tickets or the table to filter and sort.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link to={`/projects/${projectSlug}/board`}>
+            <Button variant="quiet" size="sm">
+              Open board
+            </Button>
+          </Link>
+          <Link to={`/projects/${projectSlug}/list`}>
+            <Button variant="primary" size="sm">
+              Open ticket list
+            </Button>
+          </Link>
+        </div>
       </div>
     </div>
   );
