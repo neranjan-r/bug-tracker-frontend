@@ -8,3 +8,4 @@
 2026-11-12 | Prompt 13 (Real-time Socket.io frontend): Installed socket.io-client, added SocketContext + useProjectLiveUpdates (ignoring self-triggered events and reloading on reconnect), and wired live updates into ProjectLayout, Board, List, Overview, and TicketDetailPage. Verified build.
 2026-11-12 | Prompt 15 (Deployment readiness): Added vercel.json and public/_redirects for SPA deep-link refresh support on Vercel/Netlify. Verified production build.
 2026-11-12 | Prompt 16 (Documentation): Added client/README.md documenting setup, scripts, environment variables, and SPA routing configuration.
+2026-11-12 | Git Repository & Push: Initialized git repository in client/, created https://github.com/neranjan-r/bug-tracker-frontend, and pushed main branch to origin.
