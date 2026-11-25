@@ -4,11 +4,15 @@ import { Button } from "./ui.jsx";
 export default class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, error: null };
   }
 
-  static getDerivedStateFromError() {
-    return { hasError: true };
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught an error:", error, errorInfo);
   }
 
   render() {
@@ -23,10 +27,17 @@ export default class ErrorBoundary extends Component {
               Could not display this view
             </h1>
             <p className="mt-1.5 text-sm text-ink-muted">
-              Reload the page or return to the projects list to continue.
+              {this.state.error?.message ||
+                "Reload the page or return to the projects list to continue."}
             </p>
             <div className="mt-5 flex items-center gap-2">
-              <Button variant="quiet" onClick={() => window.location.assign("/")}>
+              <Button
+                variant="quiet"
+                onClick={() => {
+                  this.setState({ hasError: false, error: null });
+                  window.location.assign("/");
+                }}
+              >
                 Projects
               </Button>
               <Button variant="primary" onClick={() => window.location.reload()}>

@@ -1,7 +1,7 @@
 import { X } from "lucide-react";
 
-export default function ToastContainer({ toasts, onDismiss }) {
-  if (!toasts.length) return null;
+export default function ToastContainer({ toasts = [], onDismiss = () => {} }) {
+  if (!toasts || !toasts.length) return null;
 
   return (
     <div

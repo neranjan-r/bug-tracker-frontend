@@ -2,7 +2,6 @@ import { Navigate, Route, Routes, useParams } from "react-router-dom";
 import { ProtectedRoute, PublicOnlyRoute } from "./components/ProtectedRoute.jsx";
 import AppLayout from "./components/AppLayout.jsx";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
-import ToastContainer from "./components/ToastContainer.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
 import RegisterPage from "./pages/RegisterPage.jsx";
 import ProjectsPage from "./pages/ProjectsPage.jsx";
@@ -49,7 +48,6 @@ export default function App() {
         <Route path="/404" element={<NotFoundPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
-      <ToastContainer />
     </ErrorBoundary>
   );
 }

@@ -69,3 +69,4 @@ export function useTicketShortcuts({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [canCreate, onNewTicket, searchRef, modalOpen]);
 }
+

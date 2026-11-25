@@ -62,3 +62,4 @@ export function getProjectRouteId(project) {
 export function getTicketRouteId(ticket) {
   return ticket?.key || ticket?._id || "";
 }
+

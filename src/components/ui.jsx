@@ -137,3 +137,4 @@ export function Wordmark({ compact = false }) {
     </span>
   );
 }
+
